@@ -70,6 +70,11 @@ func (*mockTimestreamClient) DescribeDatabase(
 }
 
 func TestConnectValidatesConfigParameters(t *testing.T) {
+	originalWriteFactory := WriteFactory
+	t.Cleanup(func() {
+		WriteFactory = originalWriteFactory
+	})
+
 	WriteFactory = func(*common_aws.CredentialConfig) (WriteClient, error) {
 		return &mockTimestreamClient{}, nil
 	}
@@ -222,6 +227,25 @@ func TestConnectValidatesConfigParameters(t *testing.T) {
 		Log:                     testutil.Logger{},
 	}
 	require.Contains(t, describeTableInvoked.Connect().Error(), "hello from DescribeDatabase")
+}
+
+func TestConnectReturnsWriteFactoryError(t *testing.T) {
+	originalWriteFactory := WriteFactory
+	t.Cleanup(func() {
+		WriteFactory = originalWriteFactory
+	})
+
+	WriteFactory = func(*common_aws.CredentialConfig) (WriteClient, error) {
+		return nil, errors.New("unable to construct client")
+	}
+
+	plugin := Timestream{
+		DatabaseName: tsDBName,
+		MappingMode:  MappingModeMultiTable,
+		Log:          testutil.Logger{},
+	}
+
+	require.ErrorContains(t, plugin.Connect(), "unable to construct client")
 }
 
 func TestWriteMultiMeasuresSingleTableMode(t *testing.T) {
@@ -642,6 +666,7 @@ func TestWriteWhenRequestsGreaterThanMaxWriteGoRoutinesCount(t *testing.T) {
 	const totalRecords = maxWriteRecordsCalls * maxRecordsInWriteRecordsCall
 	mockClient := &mockTimestreamClient{0}
 
+	//nolint:unparam // False-positive as this is only a mock and we must adhere to the interface
 	WriteFactory = func(*common_aws.CredentialConfig) (WriteClient, error) {
 		return mockClient, nil
 	}
@@ -681,6 +706,7 @@ func TestWriteWhenRequestsLesserThanMaxWriteGoRoutinesCount(t *testing.T) {
 	const totalRecords = maxWriteRecordsCalls * maxRecordsInWriteRecordsCall
 	mockClient := &mockTimestreamClient{0}
 
+	//nolint:unparam // False-positive as this is only a mock and we must adhere to the interface
 	WriteFactory = func(*common_aws.CredentialConfig) (WriteClient, error) {
 		return mockClient, nil
 	}
