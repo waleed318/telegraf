@@ -5,6 +5,9 @@ package x509_cert
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
@@ -481,17 +484,27 @@ func (c *X509Cert) getCert(u *url.URL, timeout time.Duration) ([]*x509.Certifica
 	}
 }
 
-func getFields(cert *x509.Certificate, now time.Time) map[string]interface{} {
+func getFields(cert *x509.Certificate, now time.Time) map[string]any {
 	age := int(now.Sub(cert.NotBefore).Seconds())
 	expiry := int(cert.NotAfter.Sub(now).Seconds())
 	startdate := cert.NotBefore.Unix()
 	enddate := cert.NotAfter.Unix()
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"age":       age,
 		"expiry":    expiry,
 		"startdate": startdate,
 		"enddate":   enddate,
+	}
+
+	// Determine the bit-length of the public key for algorithms that support it
+	switch v := cert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		fields["public_key_length"] = 8 * uint64(v.Size())
+	case *ecdsa.PublicKey:
+		fields["public_key_length"] = uint64(v.Params().BitSize)
+	case ed25519.PublicKey:
+		fields["public_key_length"] = 8 * uint64(ed25519.PublicKeySize)
 	}
 
 	return fields
